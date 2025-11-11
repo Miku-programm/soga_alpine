@@ -43,12 +43,23 @@ echo -e "${GREEN}检测到系统架构：${ARCH}${PLAIN}"
 install_dependencies() {
     echo -e "${GREEN}正在安装必要的依赖...${PLAIN}"
     apk update
-    apk add --no-cache wget curl ca-certificates openrc jq
+    apk add --no-cache wget curl ca-certificates openrc jq tzdata
     
     # 检查是否需要安装 gcompat (用于运行 glibc 程序)
     if ! apk info gcompat >/dev/null 2>&1; then
         echo -e "${YELLOW}安装 gcompat 以支持 glibc 程序...${PLAIN}"
         apk add --no-cache gcompat
+    fi
+    
+    # 设置时区为 Asia/Shanghai（可根据需要修改）
+    if [ ! -f /etc/timezone ]; then
+        echo "Asia/Shanghai" > /etc/timezone
+        echo -e "${GREEN}已设置时区为 Asia/Shanghai${PLAIN}"
+    fi
+    
+    # 创建时区符号链接
+    if [ ! -L /etc/localtime ]; then
+        ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
     fi
 }
 
