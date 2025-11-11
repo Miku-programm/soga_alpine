@@ -350,14 +350,7 @@ rc-service soga restart
 3. 合理设置 `report_interval`，减少 API 请求频率
 4. 使用 VLESS 协议替代 VMess，降低内存占用
 
----
 
-## 获取帮助
-
-- GitHub 项目: https://github.com/vaxilu/soga
-- 查看 issue: https://github.com/vaxilu/soga/issues
-
----
 
 ## 许可证
 
