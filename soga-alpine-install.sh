@@ -116,9 +116,10 @@ install_soga() {
         rc-service soga stop 2>/dev/null || true
     fi
     
-    # 复制二进制文件
-    cp soga /usr/local/bin/
-    chmod +x /usr/local/bin/soga
+    # 复制二进制文件到 /usr/local/sbin (而不是 /usr/local/bin)
+    # 这样可以避免与管理脚本 /usr/bin/soga 冲突
+    cp soga /usr/local/sbin/soga-bin
+    chmod +x /usr/local/sbin/soga-bin
     
     # 创建配置目录
     mkdir -p /etc/soga
@@ -156,14 +157,25 @@ create_openrc_service() {
 name="soga"
 description="Soga Proxy Backend Service"
 
-command="/usr/local/bin/soga"
+command="/usr/local/sbin/soga-bin"
 command_args="-c /etc/soga/soga.conf"
 command_background=true
 pidfile="/run/soga.pid"
 command_user="root"
 
+# 保活机制：进程意外退出时自动重启
+# respawn_delay: 重启前等待时间（秒）
+# respawn_max: 在 respawn_period 时间内最多重启次数
+# respawn_period: 时间周期（秒）
+respawn_delay=5
+respawn_max=10
+respawn_period=60
+
 output_log="/var/log/soga/output.log"
 error_log="/var/log/soga/error.log"
+
+# 设置环境变量
+export TZ="Asia/Shanghai"
 
 depend() {
     need net
@@ -180,21 +192,69 @@ start_pre() {
         eerror "配置文件不存在：/etc/soga/soga.conf"
         return 1
     fi
+    
+    # 清理可能残留的旧进程
+    if [ -f "$pidfile" ]; then
+        local old_pid=$(cat "$pidfile")
+        if [ -n "$old_pid" ] && ! kill -0 "$old_pid" 2>/dev/null; then
+            rm -f "$pidfile"
+            ewarn "清理了残留的 PID 文件"
+        fi
+    fi
 }
 
 start_post() {
-    einfo "soga 已启动"
-    einfo "使用 'soga log' 查看日志"
+    # 等待进程启动
+    sleep 2
+    
+    if [ -f "$pidfile" ]; then
+        local pid=$(cat "$pidfile")
+        if kill -0 "$pid" 2>/dev/null; then
+            einfo "soga 已启动 (PID: $pid)"
+            einfo "使用 'soga log' 查看日志"
+        else
+            eerror "soga 启动失败"
+            return 1
+        fi
+    else
+        ewarn "PID 文件不存在，但服务可能正在运行"
+    fi
+}
+
+stop_pre() {
+    einfo "正在停止 soga..."
 }
 
 stop_post() {
+    # 确保进程完全停止
+    if [ -f "$pidfile" ]; then
+        local pid=$(cat "$pidfile")
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            ewarn "进程仍在运行，发送 SIGKILL..."
+            kill -9 "$pid" 2>/dev/null
+            sleep 1
+        fi
+        rm -f "$pidfile"
+    fi
+    
     einfo "soga 已停止"
+}
+
+# 健康检查函数
+healthcheck() {
+    if [ -f "$pidfile" ]; then
+        local pid=$(cat "$pidfile")
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
 }
 EOF
 
     chmod +x /etc/init.d/soga
     
-    echo -e "${GREEN}OpenRC 服务创建完成${PLAIN}"
+    echo -e "${GREEN}OpenRC 服务创建完成（已配置自动重启）${PLAIN}"
 }
 
 # 创建官方风格的管理脚本
@@ -362,8 +422,8 @@ update() {
     
     tar -xzf soga.tar.gz
     cd soga
-    cp soga /usr/local/bin/
-    chmod +x /usr/local/bin/soga
+    cp soga /usr/local/sbin/soga-bin
+    chmod +x /usr/local/sbin/soga-bin
     
     cd /tmp
     rm -rf soga soga.tar.gz
@@ -388,7 +448,7 @@ uninstall() {
     rc-service soga stop 2>/dev/null || true
     rc-update del soga default 2>/dev/null || true
     rm -f /etc/init.d/soga
-    rm -f /usr/local/bin/soga
+    rm -f /usr/local/sbin/soga-bin
     rm -f /usr/bin/soga
     rm -rf /etc/soga
     rm -rf /var/log/soga
@@ -549,7 +609,7 @@ set_config() {
 
 # 显示版本
 show_version() {
-    /usr/local/bin/soga -v
+    /usr/local/sbin/soga-bin -v
     
     if [ $# -eq 0 ]; then
         before_show_menu
