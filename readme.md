@@ -25,7 +25,11 @@
 
 ```bash
 wget https://raw.githubusercontent.com/Miku-programm/soga_alpine/refs/heads/main/soga-alpine-install.sh && chmod 777 soga-alpine-install.sh && ./soga-alpine-install.sh
+```
+
 # 或者使用 curl
+
+```
 curl -O https://your-server.com/soga-alpine-install.sh
 ```
 
